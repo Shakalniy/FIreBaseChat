@@ -4,11 +4,13 @@ class ConfirmAlertDialog extends StatelessWidget {
 
   final String text;
   final void Function()? onConfirm;
+  final void Function()? onReject;
 
   const ConfirmAlertDialog({
     super.key,
     required this.text,
     this.onConfirm,
+    this.onReject,
   });
 
   @override
@@ -41,6 +43,7 @@ class ConfirmAlertDialog extends StatelessWidget {
           actions: [
             TextButton(
                 onPressed: () {
+                  onReject ?? () {};
                   Navigator.pop(context);
                 },
                 child: Text(

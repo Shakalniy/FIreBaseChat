@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatService {
   // экземпляр класса auth and firestore
@@ -11,6 +12,16 @@ class ChatService {
   final FirebaseFirestore _fireStore = FirebaseFirestore.instance;
   final FirebaseStorage firebaseStorage = FirebaseStorage.instance;
   final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
+
+  Future _setString(String theme, String key) async {
+    var prefs = await SharedPreferences.getInstance();
+    prefs.setString(key, theme);
+  }
+
+  Future<String> _getString(String key) async {
+    var prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key) ?? "";
+  }
 
   // SEND MESSAGE
   Future<void> sendMessage(String receiverId, message, List<Uint8List> images) async { //Map<String, dynamic>
@@ -31,6 +42,8 @@ class ChatService {
           .doc(chatRoomId)
           .collection('messages')
           .doc();
+
+      message = await encryptMessage(message, currentUserId, receiverId);
 
       var id = ref.path.split("/").last;
 
@@ -56,6 +69,152 @@ class ChatService {
     on FirebaseException catch (e) {
       throw Exception(e.code);
     }
+  }
+
+  Future<String> sendRequestToFriend(id) async {
+    String currentUserId = _firebaseAuth.currentUser!.uid;
+    DocumentReference ref = _fireStore.collection("users").doc(id);
+    var res = await ref.get();
+    var data = res.data() as Map<String, dynamic>;
+    List<dynamic> potentialFriends = data["potential_friends"] ?? [];
+    List<dynamic> friends = data["friends"] ?? [];
+
+    if(potentialFriends.contains(currentUserId)) {
+      return "Запрос на дружбу уже отправлен.";
+    }
+    else if (friends.contains(currentUserId)) {
+      return "Вы уже друзья )";
+    }
+
+    potentialFriends.add(currentUserId);
+
+    ref.update({
+      'potential_friends': potentialFriends,
+    });
+
+    await chatRoomInit(currentUserId, id);
+
+    return "Запрос на создание чата с ${data["name"]} успешно отправлен!";
+  }
+
+  Future<void> chatRoomInit(currentUserId, receiverId) async {
+    final String chatRoomId = getChatRoomId(currentUserId, receiverId);
+
+    DocumentReference chatRoomRef = _fireStore.collection('chat_rooms').doc(chatRoomId);
+    var chatRoomData = ((await chatRoomRef.get()).data() ?? {}) as Map;
+    List<BigInt> key = [];
+
+    if (chatRoomData.isEmpty) {
+      key = Crypto().genPrimeNum();
+      chatRoomRef.set({
+        "p": key[0].toString(),
+        "g": key[1].toString(),
+        "from_$currentUserId": key[2].toString(),
+      });
+    }
+
+    await _setString(key[3].toString(), "key_$chatRoomId");
+
+    print(key);
+  }
+
+  Future<void> addFriend(String otherUserId) async {
+    String currentUserId = _firebaseAuth.currentUser!.uid;
+    Map<String, dynamic> currentData = await getUserDataById(currentUserId);
+    Map<String, dynamic> otherData = await getUserDataById(otherUserId);
+
+    List<dynamic> currentPotentialFriends = currentData["potential_friends"] ?? [];
+    List<dynamic> currentFriends = currentData["friends"] ?? [];
+    List<dynamic> otherPotentialFriends = otherData["potential_friends"] ?? [];
+    List<dynamic> otherFriends = otherData["friends"] ?? [];
+
+    if (currentPotentialFriends.contains(otherUserId)) {
+      currentPotentialFriends.remove(otherUserId);
+    }
+    if (otherPotentialFriends.contains(currentFriends)) {
+      otherPotentialFriends.remove(currentUserId);
+    }
+
+    currentFriends.add(otherUserId);
+    otherFriends.add(currentUserId);
+
+    final String chatRoomId = getChatRoomId(currentUserId, otherUserId);
+    DocumentReference chatRoomRef = _fireStore.collection('chat_rooms').doc(chatRoomId);
+
+    var res = await chatRoomRef.get();
+    var data = res.data() as Map<String, dynamic>;
+    BigInt p = BigInt.parse(data["p"]);
+    BigInt g = BigInt.parse(data["g"]);
+    BigInt A = BigInt.parse(data["from_$otherUserId"]);
+
+    BigInt b = Crypto().nextInt(p);
+    BigInt B = Crypto().pows(g, b, p);
+
+    chatRoomRef.update({
+      "from_$currentUserId": B.toString(),
+    });
+
+    await updateUserDataById(currentUserId, {
+      "potential_friends": currentPotentialFriends,
+      "friends": currentFriends,
+    });
+
+    await updateUserDataById(otherUserId, {
+      "potential_friends": otherPotentialFriends,
+      "friends": otherFriends,
+    });
+
+    await _setString(b.toString(), "key_$chatRoomId");
+  }
+
+  Future<Map<String, dynamic>> getUserDataById(id) async {
+    DocumentReference ref = _fireStore.collection("users").doc(id);
+    var res = await ref.get();
+    var data = res.data() as Map<String, dynamic>;
+    return data;
+  }
+
+  Future<void> updateUserDataById(id, data) async {
+    DocumentReference ref = _fireStore.collection("users").doc(id);
+
+    ref.update(data);
+  }
+
+  Future<String> encryptMessage (String message, senderId, receiverId) async {
+    String chatRoomId = getChatRoomId(senderId, receiverId);
+    User user = _firebaseAuth.currentUser!;
+    String userId = user.uid == receiverId ? senderId: receiverId;
+
+    DocumentReference chatRoomRef = _fireStore.collection('chat_rooms').doc(chatRoomId);
+    var chatRoomData = (await chatRoomRef.get()).data() as Map<String, dynamic>;
+
+    BigInt a = BigInt.parse(await _getString("key_$chatRoomId"));
+    BigInt B = BigInt.parse(chatRoomData["from_$userId"]);
+    BigInt p = BigInt.parse(chatRoomData["p"]);
+    BigInt key = Crypto().pows(B, a, p);
+
+    String enText = Crypto().encryptText(message, key);
+
+    return enText;
+  }
+
+  Future<String> decryptMessage (String message, senderId, receiverId) async {
+    String chatRoomId = getChatRoomId(senderId, receiverId);
+    User user = _firebaseAuth.currentUser!;
+
+    String userId = user.uid == receiverId ? senderId: receiverId;
+
+    DocumentReference chatRoomRef = _fireStore.collection('chat_rooms').doc(chatRoomId);
+    var chatRoomData = (await chatRoomRef.get()).data() as Map<String, dynamic>;
+
+    BigInt a = BigInt.parse(await _getString("key_$chatRoomId"));
+    BigInt B = BigInt.parse(chatRoomData["from_$userId"]);
+    BigInt p = BigInt.parse(chatRoomData["p"]);
+    BigInt key = Crypto().pows(B, a, p);
+
+    String deText = Crypto().decryptText(message, key);
+
+    return deText;
   }
 
   // get user stream
@@ -98,7 +257,6 @@ class ChatService {
         }
       });
 
-    //print(images);
     return images;
   }
 
@@ -117,6 +275,11 @@ class ChatService {
             message = null;
           }
     });
+
+    if (message != null) {
+      message!["message"] = await decryptMessage(message!["message"], userId, otherUserId);
+    }
+
     return message;
   }
 

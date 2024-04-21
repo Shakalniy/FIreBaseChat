@@ -79,6 +79,23 @@ class MyDrawer extends StatelessWidget {
                   );
                 },
               ),
+              ListTile(
+                title: Text(
+                  "Заявки в друзья",
+                  style: TextStyles.styleOfMainText,
+                ),
+                leading: const Icon(Icons.person_add),
+                onTap: () {
+                  Navigator.pop(context);
+
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const AddFriends()
+                      )
+                  );
+                },
+              ),
             ],
           ),
 

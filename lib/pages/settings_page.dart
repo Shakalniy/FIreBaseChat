@@ -1,4 +1,6 @@
 import 'package:chat/app_exports.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +15,7 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   ProfileService _profileService = ProfileService();
   AuthService _authService = AuthService();
+  final FirebaseFirestore _fireStore = FirebaseFirestore.instance;
 
   void confirmDelete() {
     showDialog(
@@ -57,10 +60,10 @@ class _SettingsPageState extends State<SettingsPage> {
       var user = _authService.getCurrentUser();
       _profileService.deleteUser(user!);
       Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const AuthGate()
-          )
+        context,
+        MaterialPageRoute(
+          builder: (context) => const AuthGate()
+        )
       );
     }
     catch (e) {
@@ -71,7 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
           title: Text(
             e.toString(),
             style: const TextStyle(
-                fontFamily: "RobotoSlab"
+              fontFamily: "RobotoSlab"
             ),
           ),
         ),

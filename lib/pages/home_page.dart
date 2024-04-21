@@ -13,6 +13,8 @@ class _HomePageState extends State<HomePage> {
   final ChatService _chatService = ChatService();
   final AuthService _authService = AuthService();
   final ProfileService _profileService = ProfileService();
+  bool isLoading = true;
+  List<Map<String, dynamic>> friendsData = [];
 
   void confirmDeleteAllDialogs() {
     Navigator.pop(context);
@@ -88,8 +90,47 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> findUser() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const SearchUser(),
+      ),
+    );
+    if (result == "result") {
+      setState(() {});
+    }
+  }
+
+  Future<void> getUserData() async {
+    final String userId = _authService.getCurrentUser()!.uid;
+    var user = await ProfileService.getData(userId);
+    var data = user!.data() as Map<String, dynamic>;
+    List<String> friendsIds = (data["friends"] ?? []).cast<String>();
+    List<Map<String,dynamic>> friendData = [];
+
+    for (var id in friendsIds) {
+      var friend = await ProfileService.getData(id);
+      var data = friend!.data() as Map<String, dynamic>;
+      friendData.add(data);
+    }
+
+    setState(() {
+      friendsData = friendData;
+      isLoading = false;
+    });
+  }
+
   @override
-  Widget build(BuildContext context) {return Scaffold(
+  void initState() {
+    getUserData();
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return isLoading ? const Scaffold(body: Center(child: CircularProgressIndicator(),))
+      : Scaffold(
       appBar: AppBar(
         title: Text(
           "Главная страница",
@@ -106,13 +147,16 @@ class _HomePageState extends State<HomePage> {
                       confirmDeleteAllDialogs();
                       setState(() {});
                     },
-                    "Другая функция": () {},
+                    "Найти пользователя": () async {
+                      await findUser();
+                    },
                   },
                   width: 200,
                   alignment: Alignment.topRight,
                   margins: const { "top": 50.0, "bottom": 0.0, "left": 0.0, "right": 20.0, },
                 ),
               );
+              setState(() {});
             },
             icon: const Icon(Icons.more_vert_outlined)
           )
@@ -120,64 +164,25 @@ class _HomePageState extends State<HomePage> {
       ),
       drawer: const MyDrawer(),
       
-      body: _buildUserList(),
-    );
-  }
-
-  // список пользователей, кроме текущего
-  Widget _buildUserList() {
-    return StreamBuilder(
-      stream: _chatService.getUsersStream(), 
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              "Ошибка",
-              style: TextStyles.styleOfErrorText
-            ),
-          );
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator()
-          );
-        }
-
-        return ListView(
-          children: snapshot.data!
-            .map<Widget>((userData) => _buildUserListItem(userData, context))
-            .toList(),
-        );
-      }
+      body: RefreshIndicator(
+        onRefresh: getUserData,
+        child: ListView(
+          children: friendsData
+              .map<Widget>((userData) => _buildUserListItem(userData, context))
+              .toList(),
+        ),
+      ),
     );
   }
 
   // виджет отдельного пользователя в списке
   Widget _buildUserListItem(Map<String, dynamic> userData, BuildContext context) {
-
-    // показываем всех пользователей кроме текущего
-    if (userData["email"] != _authService.getCurrentUser()!.email) {
-      return UserTile(
-        name: userData["name"] ?? "Anonimus",
-        otherUserId: userData["uid"],
-        onTap: () async {
-          // переход в чат
-          final result = await Navigator.push(
-            context, 
-            MaterialPageRoute(
-              builder: (context) => ChatPage(
-                receiverUserName: userData['name'] ?? userData["email"],
-                receiverUserID: userData['uid'],
-              ),
-            ),
-          );
-          if (result == "result") {
-            setState(() {});
-          }
-        },
-        onLongTap: () {
-          showDialog(
+    return UserTile(
+      name: userData["name"] ?? "Anonimus",
+      otherUserId: userData["uid"],
+      userData: userData,
+      onLongTap: () {
+        showDialog(
             context: context,
             builder: (context) => MyAlertDialog(
               actions: {
@@ -189,13 +194,9 @@ class _HomePageState extends State<HomePage> {
               },
               margins: const { "top": 0, "bottom": 0, "left": 20, "right": 20, },
             )
-          );
-        },
-      );
-    }
-    else {
-      return Container();
-    }
+        );
+      },
+    );
   }
 
 }

@@ -35,8 +35,17 @@ class _ChatBubbleState extends State<ChatBubble> {
   final ChatService _chatService = ChatService();
   List<Map<String, dynamic>> _images = [];
   bool isLoading = true;
+  String message = "";
+
+  Future<void> decryptText() async {
+    String mes = await _chatService.decryptMessage(widget.message, widget.senderId, widget.receiverId);
+    setState(() {
+      message = mes;
+    });
+  }
 
   void getImages() async {
+    await decryptText();
     _images = await _chatService.getMessageImages(widget.senderId, widget.receiverId, widget.messageId);
     setState(() {
       isLoading = false;
@@ -72,11 +81,11 @@ class _ChatBubbleState extends State<ChatBubble> {
           child: Column(
             crossAxisAlignment: _images.isNotEmpty ? CrossAxisAlignment.end : CrossAxisAlignment.values[0],
             children: [
-              widget.message != ""
+              message != ""
               ? Container(
                 margin: _images.isEmpty ? const EdgeInsets.only(right: 25) : null,
                 child: Text(
-                  widget.message,
+                  message,
                   textAlign: TextAlign.start,
                   style: const TextStyle(
                     fontFamily: "RobotoSlab",

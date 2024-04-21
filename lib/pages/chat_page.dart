@@ -22,7 +22,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _messageController = TextEditingController();
-  final TextEditingController _messageRafactorController = TextEditingController();
+  final TextEditingController _messageRefactorController = TextEditingController();
   final ChatService _chatService = ChatService();
   final ProfileService _profileService = ProfileService();
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -41,7 +41,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void initState() {
-    getImageData();
+    getData();
     super.initState();
 
     // добавляем слушателя к узлу фокусировки
@@ -58,6 +58,13 @@ class _ChatPageState extends State<ChatPage> {
       const Duration(milliseconds: 500), 
       () => scrollDown()
     );
+  }
+
+  Future<String> decryptText(String message) async {
+    final String userId = _firebaseAuth.currentUser!.uid;
+    String mes = await _chatService.decryptMessage(message, userId, widget.receiverUserID);
+
+    return mes;
   }
 
   @override
@@ -169,7 +176,8 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> refactorMessage(Map<String, dynamic> data) async {
-    _messageRafactorController.text = data["message"];
+    String mes = await decryptText(data["message"]);
+    _messageRefactorController.text = mes;
     List<Map<String, dynamic>> imagesInMessage = await _chatService.getMessageImages(data["senderId"], data["receiverId"], data["ids"]);
     for (var element in imagesInMessage) {
       newImagesInMessage.add(element);
@@ -184,7 +192,9 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void sendChanges() async {
-    String message = _messageRafactorController.text.trim();
+    String mes = _messageRefactorController.text.trim();
+    String currentId = _firebaseAuth.currentUser!.uid;
+    String message = await _chatService.encryptMessage(mes, currentId, widget.receiverUserID);
     if (message.isNotEmpty || (newImagesInMessage.isNotEmpty)) {
       await _chatService.editMessage(
         currentMessageData,
@@ -195,7 +205,7 @@ class _ChatPageState extends State<ChatPage> {
       setState(() {
         isRefactor = false;
         currentMessageData = {};
-        _messageRafactorController.clear();
+        _messageRefactorController.clear();
         newImagesInMessage = [];
         deletedImage = [];
         addingImage = [];
@@ -253,15 +263,20 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> getData() async {
+    await getImageData();
+
+    setState(() {
+      isLoading = false;
+    });
+  }
+
   Future<void> getImageData() async {
     List<Map<String, dynamic>> tempData = await _profileService.getProfileImages(widget.receiverUserID);
     if (tempData.isNotEmpty) {
       Map<String, dynamic> data = tempData.last;
       _profileImage = data['imageLink'];
     }
-    setState(() {
-      isLoading = false;
-    });
   }
 
   @override
@@ -405,7 +420,6 @@ class _ChatPageState extends State<ChatPage> {
               time: time,
               onTap: () async {
                 await onTapMessage(data, isOurMessage);
-                // print("dniweqvbefhui");
               },
               isEditing: data["isEditing"] ?? false
             ),
@@ -517,7 +531,7 @@ class _ChatPageState extends State<ChatPage> {
                   onPressed: () {
                     setState(() {
                       currentMessageData = {};
-                      _messageRafactorController.clear();
+                      _messageRefactorController.clear();
                       newImagesInMessage = [];
                       deletedImage = [];
                       addingImage = [];
@@ -575,7 +589,7 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ) : const SizedBox(),
           MyTextField(
-            controller: _messageRafactorController, 
+            controller: _messageRefactorController,
             hintText: 'Введите сообщение', 
             obscureText: false,
             typeOfField: "message",

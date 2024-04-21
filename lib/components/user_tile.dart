@@ -5,6 +5,7 @@ class UserTile extends StatefulWidget {
 
   final String name;
   final String otherUserId;
+  final Map<String, dynamic> userData;
   final void Function()? onTap;
   final void Function()? onLongTap;
 
@@ -12,6 +13,7 @@ class UserTile extends StatefulWidget {
     super.key, 
     required this.name,
     required this.otherUserId,
+    required this.userData,
     this.onTap,
     this.onLongTap,
   });
@@ -29,7 +31,6 @@ class _UserTileState extends State<UserTile> {
   String? _image;
 
   Future<void> getImageData() async {
-    //String imageId = await _getImageId("imageId${widget.otherUserId}");
     List<Map<String, dynamic>> tempData = await _profileService.getProfileImages(widget.otherUserId);
     if (tempData.isNotEmpty) {
       Map<String, dynamic> data = tempData.last;
@@ -70,7 +71,21 @@ class _UserTileState extends State<UserTile> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: widget.onTap,
+                onTap: () async {
+                  // переход в чат
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatPage(
+                        receiverUserName: widget.userData['name'] ?? widget.userData["email"],
+                        receiverUserID: widget.userData['uid'],
+                      ),
+                    ),
+                  );
+                  if (result == "result") {
+                    await getLastMessage(widget.otherUserId);
+                  }
+                },
                 onLongPress: widget.onLongTap,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),

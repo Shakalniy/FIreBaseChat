@@ -11,16 +11,9 @@ final navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
-    // options: const FirebaseOptions(
-    //   apiKey: "AIzaSyC6OzpPly1oGbvYqCQ2uM8ZjCa5WcE8JBk",
-    //   appId: "1:1053740152801:android:3c3f2069a069c008c084a0",
-    //   messagingSenderId: "1053740152801",
-    //   projectId: "chatapp-cb990"
-    // ),
     options: DefaultFirebaseOptions.currentPlatform,
   );
   runApp(
-    //const MyApp()
     ChangeNotifierProvider(
       create: (context) => ThemeProvider(),
       child: const MyApp(),

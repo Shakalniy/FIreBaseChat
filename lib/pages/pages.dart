@@ -6,3 +6,5 @@ export 'settings_page.dart';
 export 'change_profile_page.dart';
 export 'profile_page.dart';
 export 'view_photo_page.dart';
+export 'search_users.dart';
+export 'add_friends.dart';

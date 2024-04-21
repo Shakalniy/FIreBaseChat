@@ -20,7 +20,7 @@ dependencies:
   cloud_firestore: ^4.8.0
   firebase_messaging: ^14.7.10
   shared_preferences: ^2.2.2
-  fluttertoast: ^8.0.9
+  fluttertoast: ^8.2.5
   image_picker: ^0.8.5
   firebase_storage: ^11.6.0
   get_it: ^7.2.0
